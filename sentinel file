@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SENTINEL — AAPL Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="scanlines"></div>
+<div class="grid-bg"></div>
+<div class="hud-corner tl"></div>
+<div class="hud-corner tr"></div>
+<div class="hud-corner bl"></div>
+<div class="hud-corner br"></div>
+<header>
+  <div class="header-left">
+    <div class="logo">SENTINEL<span class="logo-dot">.</span>AI</div>
+    <div class="header-sub">PASSIVE INTELLIGENCE OVERLAY // AAPL</div>
+  </div>
+  <div class="header-center">
+    <div class="price-display">
+      <span class="price-label">LAST</span>
+      <span class="price-value" id="current-price">—</span>
+      <span class="price-change" id="price-change">—</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-row">
+      <span class="status-dot" id="status-dot"></span>
+      <span class="status-text" id="status-text">INITIALIZING</span>
+    </div>
+    <div class="last-update">UPDATED <span id="last-update-time">--:--:--</span></div>
+  </div>
+</header>
+<main>
+  <aside class="left-panel">
+    <div class="panel-block rating-block">
+      <div class="block-label">AI SIGNAL</div>
+      <div class="rating-display">
+        <div class="rating-badge" id="rating-badge">—</div>
+        <div class="confidence-wrap">
+          <div class="conf-label">CONFIDENCE</div>
+          <div class="conf-bar-track"><div class="conf-bar-fill" id="conf-bar" style="width:0%"></div></div>
+          <div class="conf-pct" id="conf-pct">0%</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-block evidence-block">
+      <div class="block-label">EVIDENCE FEED</div>
+      <div class="evidence-list" id="evidence-list">
+        <div class="ev-placeholder">Awaiting AI analysis...</div>
+      </div>
+    </div>
+    <div class="panel-block sentiment-block">
+      <div class="block-label">SENTIMENT MATRIX</div>
+      <div class="sentiment-grid">
+        <div class="sent-card">
+          <div class="sent-source">STOCKTWITS</div>
+          <div class="sent-bars">
+            <div class="sent-bar bull" id="st-bull" style="width:50%"></div>
+            <div class="sent-bar bear" id="st-bear" style="width:50%"></div>
+          </div>
+          <div class="sent-nums">
+            <span class="bull-txt" id="st-bull-pct">—</span>
+            <span class="bear-txt" id="st-bear-pct">—</span>
+          </div>
+        </div>
+        <div class="sent-card">
+          <div class="sent-source">REDDIT WSB</div>
+          <div class="sent-bars">
+            <div class="sent-bar bull" id="rd-bull" style="width:50%"></div>
+            <div class="sent-bar bear" id="rd-bear" style="width:50%"></div>
+          </div>
+          <div class="sent-nums">
+            <span class="bull-txt" id="rd-bull-pct">—</span>
+            <span class="bear-txt" id="rd-bear-pct">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-block news-block">
+      <div class="block-label">NEWS WIRE</div>
+      <div class="news-list" id="news-list">
+        <div class="news-placeholder">Loading headlines...</div>
+      </div>
+    </div>
+    <div class="panel-block macro-block">
+      <div class="block-label">MACRO CONTEXT</div>
+      <div class="macro-grid">
+        <div class="macro-item"><span class="macro-label">VIX</span><span class="macro-val" id="m-vix">—</span></div>
+        <div class="macro-item"><span class="macro-label">DXY</span><span class="macro-val" id="m-dxy">—</span></div>
+        <div class="macro-item"><span class="macro-label">SPY</span><span class="macro-val" id="m-spy">—</span></div>
+        <div class="macro-item"><span class="macro-label">QQQ</span><span class="macro-val" id="m-qqq">—</span></div>
+      </div>
+    </div>
+  </aside>
+  <section class="right-panel">
+    <div class="chart-header">
+      <div class="chart-title">AAPL <span class="tf-label">1D</span></div>
+      <div class="chart-controls">
+        <button class="tf-btn active" data-tf="1d">1D</button>
+        <button class="tf-btn" data-tf="5d">5D</button>
+        <button class="tf-btn" data-tf="1mo">1M</button>
+        <button class="tf-btn" data-tf="3mo">3M</button>
+      </div>
+      <div class="overlay-tags" id="overlay-tags"></div>
+    </div>
+    <div id="chart-container"></div>
+    <div class="chart-footer">
+      <span id="sr-label">SUPPORT/RESISTANCE ACTIVE</span>
+      <span class="chart-data-src">DATA: YAHOO FINANCE</span>
+    </div>
+  </section>
+</main>
+<div class="refresh-bar"><div class="refresh-fill" id="refresh-fill"></div></div>
+<div class="refresh-label">NEXT REFRESH <span id="countdown">60</span>s</div>
+<script src="app.js"></script>
+</body>
+</html>
