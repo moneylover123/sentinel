@@ -26,11 +26,9 @@ async function fetchWithProxy(url) {
         const text = await res.text();
         return JSON.parse(text);
       }
-    } catch(e) {
-      continue;
-    }
+    } catch(e) { continue; }
   }
-  throw new Error('All proxies failed for: ' + url);
+  throw new Error('All proxies failed');
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -41,11 +39,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 async function runAll() {
   setStatus('LOADING', 'loading');
-  try {
-    await fetchChartData(currentTf);
-  } catch(e) {
-    console.error('Chart failed:', e);
-  }
+  try { await fetchChartData(currentTf); } catch(e) { console.error('Chart:', e); }
   try { await fetchNews(); } catch(e) {}
   try { await fetchStockTwits(); } catch(e) {}
   try { await fetchReddit(); } catch(e) {}
@@ -61,7 +55,7 @@ function initChart() {
     width: container.clientWidth,
     height: container.clientHeight,
     layout: { background: { color: 'transparent' }, textColor: 'rgba(200,255,240,0.5)' },
-    grid: { vertLines: { color: 'rgba(0,255,200,0.05)' }, horzLines: { color: 'rgba(0,255,200,0.05)' } },
+    grid: { vertLines: { color: 'rgba(0,255,200,0.04)' }, horzLines: { color: 'rgba(0,255,200,0.04)' } },
     crosshair: { vertLine: { color: 'rgba(0,255,200,0.4)', width: 1, style: 2 }, horzLine: { color: 'rgba(0,255,200,0.4)', width: 1, style: 2 } },
     rightPriceScale: { borderColor: 'rgba(0,255,200,0.1)', textColor: 'rgba(200,255,240,0.5)' },
     timeScale: { borderColor: 'rgba(0,255,200,0.1)', timeVisible: true, secondsVisible: false },
@@ -120,9 +114,8 @@ async function fetchChartData(tf) {
     drawSupportResistance(candles);
     detectPatterns(candles);
     chart.timeScale().fitContent();
-  } catch (e) {
+  } catch(e) {
     console.error('Chart error:', e);
-    document.getElementById('current-price').textContent = 'Error';
   }
 }
 
@@ -134,13 +127,11 @@ function drawSupportResistance(candles) {
   const recent = candles.slice(-60);
   for (let i = 2; i < recent.length - 2; i++) {
     if (recent[i].high > recent[i-1].high && recent[i].high > recent[i-2].high &&
-        recent[i].high > recent[i+1].high && recent[i].high > recent[i+2].high) {
+        recent[i].high > recent[i+1].high && recent[i].high > recent[i+2].high)
       levels.push({ price: recent[i].high, type: 'resistance' });
-    }
     if (recent[i].low < recent[i-1].low && recent[i].low < recent[i-2].low &&
-        recent[i].low < recent[i+1].low && recent[i].low < recent[i+2].low) {
+        recent[i].low < recent[i+1].low && recent[i].low < recent[i+2].low)
       levels.push({ price: recent[i].low, type: 'support' });
-    }
   }
   const clustered = [];
   levels.forEach(lv => {
@@ -160,61 +151,157 @@ function drawSupportResistance(candles) {
   });
 }
 
+// ============================================================
+// STRICT PATTERN DETECTION — MAX 10 STRONG PATTERNS ONLY
+// ============================================================
 function detectPatterns(candles) {
-  const newMarkers = [];
+  const scored = [];
   const c = candles;
   const n = c.length;
 
+  const body = v => Math.abs(v.close - v.open);
+  const range = v => v.high - v.low;
+  const upperWick = v => v.high - Math.max(v.open, v.close);
+  const lowerWick = v => Math.min(v.open, v.close) - v.low;
+  const isBull = v => v.close > v.open;
+  const isBear = v => v.close < v.open;
+
+  // Average body size for context
+  const avgBody = candles.slice(-20).reduce((a, v) => a + body(v), 0) / 20;
+  const avgRange = candles.slice(-20).reduce((a, v) => a + range(v), 0) / 20;
+
   for (let i = 4; i < n; i++) {
     const curr = c[i], prev = c[i-1], prev2 = c[i-2];
-    const body = v => Math.abs(v.close - v.open);
-    const range = v => v.high - v.low;
-    const upperWick = v => v.high - Math.max(v.open, v.close);
-    const lowerWick = v => Math.min(v.open, v.close) - v.low;
-    const isBull = v => v.close > v.open;
-    const isBear = v => v.close < v.open;
 
-    if (lowerWick(curr) > body(curr) * 2 && upperWick(curr) < body(curr) * 0.5 && isBear(prev))
-      newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: 'HAMMER' });
+    // 1. HAMMER — strict: long lower wick 3x body, tiny upper wick, body above midpoint, after downtrend
+    if (
+      lowerWick(curr) >= body(curr) * 3 &&
+      upperWick(curr) <= body(curr) * 0.3 &&
+      body(curr) >= avgBody * 0.5 &&
+      isBear(prev) && isBear(prev2)
+    ) {
+      scored.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: 'HAMMER', score: 90 });
+    }
 
-    if (upperWick(curr) > body(curr) * 2 && lowerWick(curr) < body(curr) * 0.5 && isBull(prev))
-      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: 'SHOOT★' });
+    // 2. SHOOTING STAR — strict: long upper wick 3x body, tiny lower wick, after uptrend
+    if (
+      upperWick(curr) >= body(curr) * 3 &&
+      lowerWick(curr) <= body(curr) * 0.3 &&
+      body(curr) >= avgBody * 0.5 &&
+      isBull(prev) && isBull(prev2)
+    ) {
+      scored.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: 'SHOOT★', score: 90 });
+    }
 
-    if (body(curr) < range(curr) * 0.1 && range(curr) > 0)
-      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ffcc00', shape: 'circle', text: 'DOJI' });
+    // 3. DOJI — strict: body less than 5% of range, significant range (not tiny candle)
+    if (
+      body(curr) <= range(curr) * 0.05 &&
+      range(curr) >= avgRange * 0.8
+    ) {
+      scored.push({ time: curr.time, position: 'aboveBar', color: '#ffcc00', shape: 'circle', text: 'DOJI', score: 70 });
+    }
 
-    if (isBear(prev) && isBull(curr) && curr.open < prev.close && curr.close > prev.open)
-      newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: '▲ENGULF' });
+    // 4. BULLISH ENGULFING — strict: current body must be 1.5x larger than previous body
+    if (
+      isBear(prev) && isBull(curr) &&
+      curr.open < prev.close &&
+      curr.close > prev.open &&
+      body(curr) >= body(prev) * 1.5 &&
+      body(curr) >= avgBody * 1.2
+    ) {
+      scored.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: '▲ENGULF', score: 95 });
+    }
 
-    if (isBull(prev) && isBear(curr) && curr.open > prev.close && curr.close < prev.open)
-      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: '▼ENGULF' });
+    // 5. BEARISH ENGULFING — strict: same rules
+    if (
+      isBull(prev) && isBear(curr) &&
+      curr.open > prev.close &&
+      curr.close < prev.open &&
+      body(curr) >= body(prev) * 1.5 &&
+      body(curr) >= avgBody * 1.2
+    ) {
+      scored.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: '▼ENGULF', score: 95 });
+    }
 
-    if (isBear(prev2) && body(prev) < body(prev2) * 0.3 && isBull(curr) && curr.close > (prev2.open + prev2.close) / 2)
-      newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: 'MORNING★' });
+    // 6. MORNING STAR — strict 3 candle reversal
+    if (
+      isBear(prev2) && body(prev2) >= avgBody * 1.2 &&
+      body(prev) <= avgBody * 0.4 &&
+      isBull(curr) && body(curr) >= avgBody * 1.2 &&
+      curr.close > (prev2.open + prev2.close) / 2
+    ) {
+      scored.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: 'MORNING★', score: 92 });
+    }
 
-    if (isBull(prev2) && body(prev) < body(prev2) * 0.3 && isBear(curr) && curr.close < (prev2.open + prev2.close) / 2)
-      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: 'EVENING★' });
+    // 7. EVENING STAR — strict 3 candle reversal
+    if (
+      isBull(prev2) && body(prev2) >= avgBody * 1.2 &&
+      body(prev) <= avgBody * 0.4 &&
+      isBear(curr) && body(curr) >= avgBody * 1.2 &&
+      curr.close < (prev2.open + prev2.close) / 2
+    ) {
+      scored.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: 'EVENING★', score: 92 });
+    }
 
-    if (isBull(curr) && isBull(prev) && isBull(prev2) && curr.close > prev.close && prev.close > prev2.close)
-      newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: '3 SOLDIERS' });
+    // 8. DOUBLE TOP — only flag if two peaks within 0.2% of each other
+    if (i >= 20) {
+      const seg = c.slice(i - 20, i);
+      const highs = seg.map(x => x.high);
+      const maxH = Math.max(...highs);
+      const peaks = highs.filter(h => Math.abs(h - maxH) / maxH < 0.002);
+      if (peaks.length >= 2 && isBear(curr) && body(curr) >= avgBody * 1.2) {
+        scored.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: '2TOP', score: 88 });
+      }
+    }
 
-    if (isBear(curr) && isBear(prev) && isBear(prev2) && curr.close < prev.close && prev.close < prev2.close)
-      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: '3 CROWS' });
+    // 9. DOUBLE BOTTOM — only flag if two troughs within 0.2% of each other
+    if (i >= 20) {
+      const seg = c.slice(i - 20, i);
+      const lows = seg.map(x => x.low);
+      const minL = Math.min(...lows);
+      const troughs = lows.filter(l => Math.abs(l - minL) / minL < 0.002);
+      if (troughs.length >= 2 && isBull(curr) && body(curr) >= avgBody * 1.2) {
+        scored.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: '2BOTTOM', score: 88 });
+      }
+    }
+
+    // 10. BULL FLAG — strong pole then tight consolidation
+    if (i >= 8) {
+      const pole = c.slice(i - 8, i - 4);
+      const flag = c.slice(i - 4, i);
+      const poleGain = (pole[pole.length-1].close - pole[0].open) / pole[0].open;
+      const flagHigh = Math.max(...flag.map(x => x.high));
+      const flagLow = Math.min(...flag.map(x => x.low));
+      const flagRange = flagHigh - flagLow;
+      const poleRange = Math.max(...pole.map(x => x.high)) - Math.min(...pole.map(x => x.low));
+      if (poleGain > 0.02 && flagRange < poleRange * 0.4 && isBull(curr)) {
+        scored.push({ time: curr.time, position: 'belowBar', color: '#00ffc8', shape: 'arrowUp', text: 'BULL FLAG', score: 85 });
+      }
+    }
   }
 
-  const seen = new Set();
-  const unique = newMarkers.filter(m => {
-    if (seen.has(m.time + m.text)) return false;
-    seen.add(m.time + m.text);
-    return true;
+  // Deduplicate by time — keep highest score per candle
+  const byTime = {};
+  scored.forEach(m => {
+    if (!byTime[m.time] || m.score > byTime[m.time].score) {
+      byTime[m.time] = m;
+    }
   });
-  candleSeries.setMarkers(unique.slice(-30));
+
+  // Sort by score descending, take top 10 most recent
+  const all = Object.values(byTime)
+    .sort((a, b) => b.time - a.time)
+    .slice(0, 10)
+    .sort((a, b) => a.time - b.time);
+
+  candleSeries.setMarkers(all);
 
   document.getElementById('overlay-tags').innerHTML = `
     <span class="overlay-tag sr">S/R ACTIVE</span>
-    <span class="overlay-tag pattern">PATTERNS: ${unique.length}</span>
+    <span class="overlay-tag pattern">PATTERNS: ${all.length}</span>
   `;
-  return unique;
+
+  return all;
 }
 
 async function fetchNews() {
@@ -403,4 +490,4 @@ function timeAgo(date) {
   if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
   return `${Math.floor(diff/86400)}d ago`;
-                          }
+             }
