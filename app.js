@@ -1,5 +1,5 @@
 const CONFIG = {
-  NEWS_API_KEY: 'ef3979cdd3c5472ab30dbe21f7511646',
+  GNEWS_API_KEY: 'c5fc310ce580bcba6be2fe9937f0d1f1',
   GROQ_API_KEY: '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',
   GROQ_MODEL: 'llama3-70b-8192',
   REFRESH_INTERVAL: 60,
@@ -91,10 +91,9 @@ async function fetchChartData(tf) {
   try {
     const interval = tf === '1d' ? '5m' : tf === '5d' ? '15m' : '1d';
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=${interval}&range=${tf}&includePrePost=false`;
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
     const res = await fetch(proxy);
-    const data = await res.json();
-    const parsed = JSON.parse(data.contents);
+    const parsed = await res.json();
     const result = parsed.chart.result[0];
     const timestamps = result.timestamp;
     const ohlcv = result.indicators.quote[0];
@@ -166,15 +165,13 @@ function drawSupportResistance(candles) {
 
 async function fetchNews() {
   try {
-    const url = `https://newsapi.org/v2/everything?q=Apple+AAPL+stock&sortBy=publishedAt&pageSize=8&language=en&apiKey=${CONFIG.NEWS_API_KEY}`;
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxy);
+    const url = `https://gnews.io/api/v4/search?q=AAPL+Apple+stock&lang=en&max=6&apikey=${CONFIG.GNEWS_API_KEY}`;
+    const res = await fetch(url);
     const data = await res.json();
-    const parsed = JSON.parse(data.contents);
-    const articles = parsed.articles || [];
+    const articles = data.articles || [];
     const list = document.getElementById('news-list');
     if (!articles.length) { list.innerHTML = '<div class="news-placeholder">No headlines found</div>'; return; }
-    list.innerHTML = articles.slice(0, 6).map(a => {
+    list.innerHTML = articles.map(a => {
       const ago = timeAgo(new Date(a.publishedAt));
       return `<div class="news-item" onclick="window.open('${a.url}','_blank')">
         <div class="news-headline">${a.title}</div>
@@ -189,11 +186,10 @@ async function fetchNews() {
 async function fetchStockTwits() {
   try {
     const url = `https://api.stocktwits.com/api/2/streams/symbol/AAPL.json`;
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
     const res = await fetch(proxy);
     const data = await res.json();
-    const parsed = JSON.parse(data.contents);
-    const messages = parsed.messages || [];
+    const messages = data.messages || [];
     let bull = 0, bear = 0;
     messages.forEach(m => {
       const s = m.entities?.sentiment?.basic;
@@ -216,11 +212,10 @@ async function fetchStockTwits() {
 async function fetchReddit() {
   try {
     const url = `https://www.reddit.com/r/wallstreetbets/search.json?q=AAPL&sort=new&limit=15&restrict_sr=1`;
-    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
     const res = await fetch(proxy);
     const data = await res.json();
-    const parsed = JSON.parse(data.contents);
-    const posts = parsed.data?.children || [];
+    const posts = data.data?.children || [];
     let bull = 0, bear = 0;
     posts.forEach(p => {
       const t = (p.data.title + ' ' + (p.data.selftext || '')).toLowerCase();
@@ -254,10 +249,9 @@ async function fetchMacro() {
   for (const t of tickers) {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t.symbol)}?interval=1d&range=2d`;
-      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
       const res = await fetch(proxy);
-      const data = await res.json();
-      const parsed = JSON.parse(data.contents);
+      const parsed = await res.json();
       const result = parsed.chart.result[0];
       const closes = result.indicators.quote[0].close.filter(Boolean);
       const last = closes[closes.length - 1];
@@ -381,4 +375,4 @@ function timeAgo(date) {
   if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
   return `${Math.floor(diff/86400)}d ago`;
-                                              }
+}
