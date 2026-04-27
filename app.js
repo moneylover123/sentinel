@@ -129,7 +129,7 @@ function drawSupportResistance(candles) {
     const existing = clustered.find(c => Math.abs(c.price - lv.price) / lv.price < 0.005);
     if (!existing) clustered.push(lv);
   });
-  clustered.slice(0, 6).forEach(lv => {
+  clustered.slice(0, 3).forEach(lv => {
     const line = candleSeries.createPriceLine({
       price: lv.price,
       color: lv.type === 'support' ? 'rgba(0,230,118,0.5)' : 'rgba(255,51,102,0.5)',
