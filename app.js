@@ -3,12 +3,12 @@ const CONFIG = {
   GROQ_API_KEY: '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',
   GROQ_MODEL: 'llama3-70b-8192',
   REFRESH_INTERVAL: 60,
-  TICKER: 'AAPL',
 };
 
 let chart = null;
 let candleSeries = null;
 let supportLines = [];
+let markers = [];
 let currentTf = '1d';
 let countdown = CONFIG.REFRESH_INTERVAL;
 let countdownTimer = null;
@@ -38,43 +38,21 @@ function initChart() {
   chart = LightweightCharts.createChart(container, {
     width: container.clientWidth,
     height: container.clientHeight,
-    layout: {
-      background: { color: 'transparent' },
-      textColor: 'rgba(200,255,240,0.5)',
-    },
-    grid: {
-      vertLines: { color: 'rgba(0,255,200,0.05)' },
-      horzLines: { color: 'rgba(0,255,200,0.05)' },
-    },
-    crosshair: {
-      vertLine: { color: 'rgba(0,255,200,0.4)', width: 1, style: 2 },
-      horzLine: { color: 'rgba(0,255,200,0.4)', width: 1, style: 2 },
-    },
-    rightPriceScale: {
-      borderColor: 'rgba(0,255,200,0.1)',
-      textColor: 'rgba(200,255,240,0.5)',
-    },
-    timeScale: {
-      borderColor: 'rgba(0,255,200,0.1)',
-      timeVisible: true,
-      secondsVisible: false,
-    },
+    layout: { background: { color: 'transparent' }, textColor: 'rgba(200,255,240,0.5)' },
+    grid: { vertLines: { color: 'rgba(0,255,200,0.05)' }, horzLines: { color: 'rgba(0,255,200,0.05)' } },
+    crosshair: { vertLine: { color: 'rgba(0,255,200,0.4)', width: 1, style: 2 }, horzLine: { color: 'rgba(0,255,200,0.4)', width: 1, style: 2 } },
+    rightPriceScale: { borderColor: 'rgba(0,255,200,0.1)', textColor: 'rgba(200,255,240,0.5)' },
+    timeScale: { borderColor: 'rgba(0,255,200,0.1)', timeVisible: true, secondsVisible: false },
   });
 
   candleSeries = chart.addCandlestickSeries({
-    upColor: '#00e676',
-    downColor: '#ff3366',
-    borderUpColor: '#00e676',
-    borderDownColor: '#ff3366',
-    wickUpColor: 'rgba(0,230,118,0.6)',
-    wickDownColor: 'rgba(255,51,102,0.6)',
+    upColor: '#00e676', downColor: '#ff3366',
+    borderUpColor: '#00e676', borderDownColor: '#ff3366',
+    wickUpColor: 'rgba(0,230,118,0.6)', wickDownColor: 'rgba(255,51,102,0.6)',
   });
 
   window.addEventListener('resize', () => {
-    chart.applyOptions({
-      width: container.clientWidth,
-      height: container.clientHeight,
-    });
+    chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
   });
 
   document.querySelectorAll('.tf-btn').forEach(btn => {
@@ -120,19 +98,22 @@ async function fetchChartData(tf) {
     }
 
     drawSupportResistance(candles);
+    detectPatterns(candles);
     chart.timeScale().fitContent();
   } catch (e) {
     console.error('Chart error:', e);
   }
 }
 
+// ============================================================
+// SUPPORT & RESISTANCE
+// ============================================================
 function drawSupportResistance(candles) {
-  supportLines.forEach(l => { try { chart.removePriceLine(l); } catch(e){} });
+  supportLines.forEach(l => { try { candleSeries.removePriceLine(l); } catch(e){} });
   supportLines = [];
   if (candles.length < 20) return;
   const levels = [];
-  const lookback = Math.min(candles.length, 60);
-  const recent = candles.slice(-lookback);
+  const recent = candles.slice(-60);
   for (let i = 2; i < recent.length - 2; i++) {
     if (recent[i].high > recent[i-1].high && recent[i].high > recent[i-2].high &&
         recent[i].high > recent[i+1].high && recent[i].high > recent[i+2].high) {
@@ -159,10 +140,191 @@ function drawSupportResistance(candles) {
     });
     supportLines.push(line);
   });
-  const tagsEl = document.getElementById('overlay-tags');
-  tagsEl.innerHTML = `<span class="overlay-tag sr">S/R ACTIVE (${clustered.slice(0,6).length})</span><span class="overlay-tag pattern">AUTO LEVELS</span>`;
 }
 
+// ============================================================
+// PATTERN DETECTION — ALL 15 PATTERNS
+// ============================================================
+function detectPatterns(candles) {
+  const detected = [];
+  const newMarkers = [];
+  const c = candles;
+  const n = c.length;
+
+  for (let i = 4; i < n; i++) {
+    const curr = c[i];
+    const prev = c[i - 1];
+    const prev2 = c[i - 2];
+    const prev3 = c[i - 3];
+    const prev4 = c[i - 4];
+
+    const body = (v) => Math.abs(v.close - v.open);
+    const range = (v) => v.high - v.low;
+    const upperWick = (v) => v.high - Math.max(v.open, v.close);
+    const lowerWick = (v) => Math.min(v.open, v.close) - v.low;
+    const isBull = (v) => v.close > v.open;
+    const isBear = (v) => v.close < v.open;
+
+    // 1. HAMMER
+    if (lowerWick(curr) > body(curr) * 2 && upperWick(curr) < body(curr) * 0.5 && isBear(prev)) {
+      newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: 'HAMMER' });
+      detected.push('Hammer detected — potential bullish reversal');
+    }
+
+    // 2. SHOOTING STAR
+    if (upperWick(curr) > body(curr) * 2 && lowerWick(curr) < body(curr) * 0.5 && isBull(prev)) {
+      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: 'SHOOT★' });
+      detected.push('Shooting Star — potential bearish reversal');
+    }
+
+    // 3. DOJI
+    if (body(curr) < range(curr) * 0.1 && range(curr) > 0) {
+      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ffcc00', shape: 'circle', text: 'DOJI' });
+      detected.push('Doji — indecision, watch next candle');
+    }
+
+    // 4. BULLISH ENGULFING
+    if (isBear(prev) && isBull(curr) && curr.open < prev.close && curr.close > prev.open) {
+      newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: '▲ENGULF' });
+      detected.push('Bullish Engulfing — strong buy signal');
+    }
+
+    // 5. BEARISH ENGULFING
+    if (isBull(prev) && isBear(curr) && curr.open > prev.close && curr.close < prev.open) {
+      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: '▼ENGULF' });
+      detected.push('Bearish Engulfing — strong sell signal');
+    }
+
+    // 6. MORNING STAR (3-candle bullish reversal)
+    if (i >= 2 && isBear(prev2) && body(prev) < body(prev2) * 0.3 && isBull(curr) && curr.close > (prev2.open + prev2.close) / 2) {
+      newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: 'MORNING★' });
+      detected.push('Morning Star — strong bullish reversal');
+    }
+
+    // 7. EVENING STAR (3-candle bearish reversal)
+    if (i >= 2 && isBull(prev2) && body(prev) < body(prev2) * 0.3 && isBear(curr) && curr.close < (prev2.open + prev2.close) / 2) {
+      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: 'EVENING★' });
+      detected.push('Evening Star — strong bearish reversal');
+    }
+
+    // 8. THREE WHITE SOLDIERS
+    if (isBull(curr) && isBull(prev) && isBull(prev2) &&
+        curr.close > prev.close && prev.close > prev2.close &&
+        curr.open > prev.open && prev.open > prev2.open) {
+      newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: '3 SOLDIERS' });
+      detected.push('Three White Soldiers — strong bullish momentum');
+    }
+
+    // 9. THREE BLACK CROWS
+    if (isBear(curr) && isBear(prev) && isBear(prev2) &&
+        curr.close < prev.close && prev.close < prev2.close &&
+        curr.open < prev.open && prev.open < prev2.open) {
+      newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: '3 CROWS' });
+      detected.push('Three Black Crows — strong bearish momentum');
+    }
+
+    // 10. DOUBLE TOP (last 20 candles)
+    if (i >= 20) {
+      const window = c.slice(i - 20, i);
+      const highs = window.map(x => x.high);
+      const maxH = Math.max(...highs);
+      const peaks = highs.filter(h => Math.abs(h - maxH) / maxH < 0.003);
+      if (peaks.length >= 2) {
+        newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: '2TOP' });
+        detected.push('Double Top — bearish reversal zone');
+      }
+    }
+
+    // 11. DOUBLE BOTTOM (last 20 candles)
+    if (i >= 20) {
+      const window = c.slice(i - 20, i);
+      const lows = window.map(x => x.low);
+      const minL = Math.min(...lows);
+      const troughs = lows.filter(l => Math.abs(l - minL) / minL < 0.003);
+      if (troughs.length >= 2) {
+        newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00e676', shape: 'arrowUp', text: '2BOTTOM' });
+        detected.push('Double Bottom — bullish reversal zone');
+      }
+    }
+
+    // 12. BULL FLAG (strong up move then tight consolidation)
+    if (i >= 6) {
+      const flagpole = c.slice(i - 6, i - 3);
+      const flag = c.slice(i - 3, i);
+      const poleGain = (flagpole[flagpole.length-1].close - flagpole[0].open) / flagpole[0].open;
+      const flagRange = Math.max(...flag.map(x => x.high)) - Math.min(...flag.map(x => x.low));
+      const avgBody = flag.reduce((a, x) => a + body(x), 0) / flag.length;
+      if (poleGain > 0.015 && flagRange < avgBody * 3) {
+        newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00ffc8', shape: 'arrowUp', text: 'BULL FLAG' });
+        detected.push('Bull Flag — continuation breakout likely');
+      }
+    }
+
+    // 13. FALLING WEDGE (bullish)
+    if (i >= 10) {
+      const seg = c.slice(i - 10, i);
+      const highs = seg.map(x => x.high);
+      const lows = seg.map(x => x.low);
+      const highSlope = (highs[highs.length-1] - highs[0]) / highs.length;
+      const lowSlope = (lows[lows.length-1] - lows[0]) / lows.length;
+      if (highSlope < -0.05 && lowSlope < -0.02 && highSlope < lowSlope) {
+        newMarkers.push({ time: curr.time, position: 'belowBar', color: '#00ffc8', shape: 'arrowUp', text: 'WEDGE↑' });
+        detected.push('Falling Wedge — bullish breakout setup');
+      }
+    }
+
+    // 14. ASCENDING TRIANGLE
+    if (i >= 10) {
+      const seg = c.slice(i - 10, i);
+      const highs = seg.map(x => x.high);
+      const lows = seg.map(x => x.low);
+      const maxHigh = Math.max(...highs);
+      const flatTop = highs.filter(h => Math.abs(h - maxHigh) / maxHigh < 0.004).length >= 3;
+      const lowSlope = (lows[lows.length-1] - lows[0]) / lows.length;
+      if (flatTop && lowSlope > 0.05) {
+        newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#00ffc8', shape: 'arrowUp', text: 'ASC △' });
+        detected.push('Ascending Triangle — bullish breakout pending');
+      }
+    }
+
+    // 15. DESCENDING TRIANGLE
+    if (i >= 10) {
+      const seg = c.slice(i - 10, i);
+      const highs = seg.map(x => x.high);
+      const lows = seg.map(x => x.low);
+      const minLow = Math.min(...lows);
+      const flatBottom = lows.filter(l => Math.abs(l - minLow) / minLow < 0.004).length >= 3;
+      const highSlope = (highs[highs.length-1] - highs[0]) / highs.length;
+      if (flatBottom && highSlope < -0.05) {
+        newMarkers.push({ time: curr.time, position: 'aboveBar', color: '#ff3366', shape: 'arrowDown', text: 'DESC △' });
+        detected.push('Descending Triangle — bearish breakdown likely');
+      }
+    }
+  }
+
+  // Apply markers to chart (deduplicate by time)
+  const seen = new Set();
+  const unique = newMarkers.filter(m => {
+    if (seen.has(m.time + m.text)) return false;
+    seen.add(m.time + m.text);
+    return true;
+  });
+  candleSeries.setMarkers(unique.slice(-30));
+
+  // Update overlay tags
+  const tagsEl = document.getElementById('overlay-tags');
+  const patternCount = unique.length;
+  tagsEl.innerHTML = `
+    <span class="overlay-tag sr">S/R ACTIVE</span>
+    <span class="overlay-tag pattern">PATTERNS: ${patternCount}</span>
+  `;
+
+  return detected;
+}
+
+// ============================================================
+// NEWS
+// ============================================================
 async function fetchNews() {
   try {
     const url = `https://gnews.io/api/v4/search?q=AAPL+Apple+stock&lang=en&max=6&apikey=${CONFIG.GNEWS_API_KEY}`;
@@ -183,6 +345,9 @@ async function fetchNews() {
   }
 }
 
+// ============================================================
+// STOCKTWITS
+// ============================================================
 async function fetchStockTwits() {
   try {
     const url = `https://api.stocktwits.com/api/2/streams/symbol/AAPL.json`;
@@ -204,11 +369,12 @@ async function fetchStockTwits() {
     document.getElementById('st-bull-pct').textContent = `▲ ${bullPct}%`;
     document.getElementById('st-bear-pct').textContent = `▼ ${bearPct}%`;
     return { bullPct, bearPct };
-  } catch(e) {
-    return { bullPct: 50, bearPct: 50 };
-  }
+  } catch(e) { return { bullPct: 50, bearPct: 50 }; }
 }
 
+// ============================================================
+// REDDIT
+// ============================================================
 async function fetchReddit() {
   try {
     const url = `https://www.reddit.com/r/wallstreetbets/search.json?q=AAPL&sort=new&limit=15&restrict_sr=1`;
@@ -234,11 +400,12 @@ async function fetchReddit() {
     document.getElementById('rd-bull-pct').textContent = `▲ ${bullPct}%`;
     document.getElementById('rd-bear-pct').textContent = `▼ ${bearPct}%`;
     return { bullPct, bearPct };
-  } catch(e) {
-    return { bullPct: 50, bearPct: 50 };
-  }
+  } catch(e) { return { bullPct: 50, bearPct: 50 }; }
 }
 
+// ============================================================
+// MACRO
+// ============================================================
 async function fetchMacro() {
   const tickers = [
     { id: 'm-vix', symbol: '^VIX' },
@@ -266,6 +433,9 @@ async function fetchMacro() {
   }
 }
 
+// ============================================================
+// AI ANALYSIS
+// ============================================================
 async function runAI() {
   try {
     const price = document.getElementById('current-price').textContent;
@@ -277,11 +447,13 @@ async function runAI() {
     const vix = document.getElementById('m-vix').textContent;
     const spy = document.getElementById('m-spy').textContent;
     const headlines = Array.from(document.querySelectorAll('.news-headline')).slice(0,4).map(el => el.textContent).join(' | ');
+    const patternTag = document.getElementById('overlay-tags').textContent;
 
     const prompt = `You are a quantitative trading analyst AI for the Sentinel platform. Analyze AAPL and provide a concise structured signal.
 
 CURRENT DATA:
 - AAPL Price: ${price} | Change: ${priceChange}
+- Chart Patterns Detected: ${patternTag}
 - StockTwits Sentiment: ${stBull} bullish / ${stBear} bearish
 - Reddit WSB Sentiment: ${rdBull} bullish / ${rdBear} bearish
 - VIX: ${vix} | SPY: ${spy}
@@ -300,79 +472,4 @@ Respond ONLY in this exact JSON format, no other text:
 }`;
 
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CONFIG.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: CONFIG.GROQ_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 400,
-      }),
-    });
-
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON');
-    const analysis = JSON.parse(jsonMatch[0]);
-
-    const badge = document.getElementById('rating-badge');
-    badge.textContent = analysis.rating;
-    badge.className = 'rating-badge ' + analysis.rating;
-
-    const conf = Math.min(95, Math.max(40, analysis.confidence));
-    document.getElementById('conf-bar').style.width = conf + '%';
-    document.getElementById('conf-pct').textContent = conf + '%';
-
-    const evList = document.getElementById('evidence-list');
-    evList.innerHTML = analysis.evidence.map(ev => {
-      const icon = ev.type === 'bull' ? '▲' : ev.type === 'bear' ? '▼' : '●';
-      return `<div class="ev-item ${ev.type}"><span class="ev-icon">${icon}</span><span class="ev-text">${ev.text}</span></div>`;
-    }).join('');
-  } catch(e) {
-    document.getElementById('evidence-list').innerHTML = '<div class="ev-placeholder">AI analysis unavailable</div>';
-  }
-}
-
-function startCountdown() {
-  countdown = CONFIG.REFRESH_INTERVAL;
-  const fill = document.getElementById('refresh-fill');
-  const label = document.getElementById('countdown');
-  fill.style.transition = 'none';
-  fill.style.width = '100%';
-  clearInterval(countdownTimer);
-  countdownTimer = setInterval(() => {
-    countdown--;
-    label.textContent = countdown;
-    const pct = (countdown / CONFIG.REFRESH_INTERVAL) * 100;
-    fill.style.transition = 'width 1s linear';
-    fill.style.width = pct + '%';
-    if (countdown <= 0) {
-      clearInterval(countdownTimer);
-      runAll();
-      startCountdown();
-    }
-  }, 1000);
-}
-
-function setStatus(text, state) {
-  document.getElementById('status-text').textContent = text;
-  const dot = document.getElementById('status-dot');
-  dot.className = 'status-dot ' + (state === 'loading' ? 'loading' : state === 'error' ? 'error' : '');
-}
-
-function updateTime() {
-  const now = new Date();
-  document.getElementById('last-update-time').textContent = now.toLocaleTimeString('en-US', { hour12: false });
-}
-
-function timeAgo(date) {
-  const diff = Math.floor((Date.now() - date) / 1000);
-  if (diff < 60) return `${diff}s ago`;
-  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
-  return `${Math.floor(diff/86400)}d ago`;
-}
+  
