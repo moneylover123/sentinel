@@ -69,7 +69,7 @@ async function fetchChartData(tf) {
   try {
     const interval = tf === '1d' ? '5m' : tf === '5d' ? '15m' : '1d';
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=${interval}&range=${tf}&includePrePost=false`;
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    https://api.allorigins.win/raw?url=
     const res = await fetch(proxy);
     const parsed = await res.json();
     const result = parsed.chart.result[0];
@@ -351,7 +351,7 @@ async function fetchNews() {
 async function fetchStockTwits() {
   try {
     const url = `https://api.stocktwits.com/api/2/streams/symbol/AAPL.json`;
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+   https://api.allorigins.win/raw?url= 
     const res = await fetch(proxy);
     const data = await res.json();
     const messages = data.messages || [];
@@ -378,7 +378,7 @@ async function fetchStockTwits() {
 async function fetchReddit() {
   try {
     const url = `https://www.reddit.com/r/wallstreetbets/search.json?q=AAPL&sort=new&limit=15&restrict_sr=1`;
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    https://api.allorigins.win/raw?url=
     const res = await fetch(proxy);
     const data = await res.json();
     const posts = data.data?.children || [];
@@ -416,7 +416,7 @@ async function fetchMacro() {
   for (const t of tickers) {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t.symbol)}?interval=1d&range=2d`;
-      const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+      https://api.allorigins.win/raw?url=
       const res = await fetch(proxy);
       const parsed = await res.json();
       const result = parsed.chart.result[0];
